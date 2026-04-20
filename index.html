@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>موانئ البحر المتوسط</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="icon" href="img/logo.png">
+    <style>
+        /* إعداد المتغيرات اللونية للوضع الفاتح (الافتراضي) والداكن */
+        :root {
+            --bg-body: #f4f6f8;
+            --bg-sidebar: #ffffff;
+            --bg-header: #f8f9fa;
+            --bg-box: #ffffff;
+            --bg-input: #ffffff;
+            --text-main: #333333;
+            --text-muted: #555555;
+            --border-color: #dcdde1;
+            --border-box: #e1e5e8;
+            --shadow-color: rgba(0,0,0,0.05);
+            --popup-bg: #ffffff;
+            --popup-text: #333333;
+            --btn-bg: #ffffff;
+        }
+
+        /* متغيرات الوضع الداكن (Dark Mode) */
+        [data-theme="dark"] {
+            --bg-body: #000000;
+            --bg-sidebar: #222222;
+            --bg-header: #151515;
+            --bg-box: #1e1e1e;
+            --bg-input: #111111;
+            --text-main: #e0e0e0;
+            --text-muted: #aaaaaa;
+            --border-color: #333333;
+            --border-box: #333333;
+            --shadow-color: rgba(0,0,0,0.5);
+            --popup-bg: #1e1e1e;
+            --popup-text: #ffffff;
+            --btn-bg: #111111;
+        }
+
+        body { 
+            margin: 0; padding: 0; display: flex; 
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
+            height: 100vh; background-color: var(--bg-body); 
+            overflow: hidden; color: var(--text-main);
+            transition: all 0.3s ease;
+        }
+
+        #sidebar { 
+            width: 360px; background: var(--bg-sidebar); padding: 20px; 
+            box-sizing: border-box; overflow-y: auto; 
+            display: flex; flex-direction: column; 
+            border-left: 1px solid var(--border-color); 
+            box-shadow: -2px 0 10px var(--shadow-color); z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        #map { flex-grow: 1; z-index: 1; background-color: var(--bg-body); transition: all 0.3s ease;}
+
+        .dashboard-header { 
+            background-color: var(--bg-header); padding: 15px; 
+            border-bottom: 3px solid #007ac2; margin: -20px -20px 20px -20px; 
+            text-align: center; transition: all 0.3s ease;
+        }
+        .dashboard-header h2 { margin: 0; font-size: 20px; font-weight: bold; }
+
+        .filter-section { 
+            background: var(--bg-header); padding: 15px; border-radius: 6px; 
+            border: 1px solid var(--border-color); margin-bottom: 20px; transition: all 0.3s ease;
+        }
+        .filter-title { font-size: 14px; color: #007ac2; margin-bottom: 10px; border-bottom: 1px dashed var(--border-color); padding-bottom: 5px; font-weight: bold;}
+        .filter-group { margin-bottom: 15px; }
+        .filter-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 8px; font-weight: bold;}
+        
+        select { 
+            width: 100%; padding: 8px; background: var(--bg-input); color: var(--text-main); 
+            border: 1px solid var(--border-color); border-radius: 4px; font-family: Tahoma;
+        }
+        
+        /* تصميم صناديق الاختيار (Checkboxes) */
+        .type-cb-container { display: flex; gap: 15px; margin-bottom: 10px; }
+        .checkbox-container {
+            max-height: 140px; overflow-y: auto; 
+            border: 1px solid var(--border-color); padding: 10px; 
+            background: var(--bg-box); border-radius: 4px;
+        }
+        .cb-label { display: flex; align-items: center; font-size: 13px; margin-bottom: 6px; color: var(--text-main); cursor: pointer; }
+        .cb-label input { margin-left: 8px; cursor: pointer; }
+        
+        .btn-group { display: flex; gap: 5px; margin-bottom: 5px; }
+        .btn-group button { 
+            flex: 1; padding: 5px; font-size: 11px; cursor: pointer;
+            border: 1px solid #007ac2; background: var(--btn-bg); color: #007ac2; 
+            border-radius: 3px; transition: 0.2s;
+        }
+        .btn-group button:hover { background: #007ac2; color: #fff; }
+
+        /* البطاقات الإحصائية */
+        .stat-box { 
+            background: var(--bg-box); padding: 15px; margin-bottom: 12px; 
+            text-align: center; border: 1px solid var(--border-box); border-right: 4px solid #555;
+            box-shadow: 0 2px 5px var(--shadow-color); border-radius: 4px; transition: all 0.3s ease;
+        }
+        .stat-title { font-size: 13px; color: var(--text-muted); font-weight: bold;}
+        .stat-number { font-size: 34px; font-weight: bold; margin-top: 5px; }
+        
+        .box-all { border-right-color: #0097e6; } 
+        .box-main { border-right-color: #e84118; } 
+        .box-sub { border-right-color: #00a8ff; }
+        .text-cyan { color: #0097e6; } 
+        .text-red { color: #e84118; } 
+        .text-blue { color: #00a8ff; }
+
+        .footer-credits { margin-top: auto; padding-top: 15px; border-top: 1px solid var(--border-color); text-align: center; }
+        .footer-credits .group-name { color: #00a8ff; font-weight: bold; font-size: 18px; }
+
+        /* النوافذ المنبثقة للخريطة */
+        .port-label { background: var(--popup-bg); border: 1px solid var(--border-color); color: var(--popup-text); font-family: Tahoma; font-size: 12px; font-weight: bold; }
+        .leaflet-popup-content-wrapper { background: var(--popup-bg); color: var(--popup-text); border: 1px solid var(--border-color); border-radius: 4px; text-align: right; font-family: Tahoma;}
+        .leaflet-popup-tip { background: var(--popup-bg); }
+        .port-icon-svg { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4)); }
+
+
+.logo{
+    width: 50px;
+    height: 50px;
+}
+
+
+/* ========================================= */
+        /* --- كود التجاوب مع شاشات الموبايل (Responsive) --- */
+        /* ========================================= */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column; /* تحويل الترتيب من جانبي إلى طولي */
+            }
+            #sidebar {
+                width: 100%; /* القائمة الجانبية تاخد عرض شاشة الموبايل بالكامل */
+                max-height: 45vh; /* تاخد 45% من طول الشاشة عشان الخريطة تبان */
+                border-left: none;
+                border-bottom: 1px solid var(--border-color);
+                box-shadow: 0 4px 10px var(--shadow-color);
+                z-index: 1000;
+            }
+            #map {
+                width: 100%;
+                min-height: 55vh; /* الخريطة تاخد باقي طول الشاشة (55%) */
+                flex-grow: 1;
+            }
+            /* تكبير الأزرار وقوائم الفلتر عشان تناسب اللمس بالأصبع */
+            .filter-group select, .btn-group button {
+                padding: 12px; 
+                font-size: 14px;
+            }
+            .stat-box {
+                padding: 10px; /* تقليل الفراغات توفيراً للمساحة */
+            }
+            .stat-number {
+                font-size: 28px; /* تصغير الأرقام قليلاً لتناسب الموبايل */
+            }
+        }
+
+
+/* ===== Loader احترافي ===== */
+#loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    
+    /* خلفية غامقة شفافة */
+    background: rgba(0,0,0,1);
+    backdrop-filter: blur(6px);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    z-index: 9999;
+    transition: all 0.8s ease;
+}
+
+.loader-content {
+    text-align: center;
+    transition: all 0.8s ease;
+}
+
+/* اللوجو */
+.loader-content img {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 10px;
+
+    /* حركة احترافية */
+    animation: floatLogo 2s ease-in-out infinite;
+}
+
+/* اسم الجروب */
+.loader-content h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 18px;
+    letter-spacing: 1px;
+}
+
+/* حركة خفيفة لفوق وتحت */
+@keyframes floatLogo {
+    0%   { transform: translateY(0px) scale(1); }
+    50%  { transform: translateY(-10px) scale(1.05); }
+    100% { transform: translateY(0px) scale(1); }
+}
+
+/* الحالة قبل الاختفاء (يطير لفوق يمين) */
+#loader.hide .loader-content {
+    transform: translate(300px, -300px) scale(0.5);
+    opacity: 0;
+}
+
+/* اختفاء الخلفية */
+#loader.hide {
+    opacity: 0;
+    pointer-events: none;
+}
+    
+
+
+
+
+    </style>
+</head>
+<body>
+<!-- Loader -->
+<div id="loader">
+    <div class="loader-content">
+        <img src="img/logo.png" alt="logo">
+        <h3>جروب 8</h3>
+    </div>
+</div>
+
+    <div id="sidebar">
+        <div class="dashboard-header">
+            <img class="logo" src="img/logo.png" alt="">
+            <h2>موانئ البحر المتوسط</h2>
+        </div>
+        
+        <div class="filter-section">
+            <div class="filter-title">إعدادات الواجهة والفلاتر</div>
+            
+            <div class="filter-group">
+                <label>مظهر الخريطة واللوحة:</label>
+                <select id="themeToggle" onchange="toggleTheme()">
+                    <option value="light">الوضع الفاتح (Light)</option>
+                    <option value="dark">الوضع الداكن (Dark)</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>تصنيف الميناء:</label>
+                <div class="type-cb-container">
+                    <label class="cb-label">
+                        <input type="checkbox" id="cb-type-main" checked onchange="applyFilters()"> موانئ رئيسية
+                    </label>
+                    <label class="cb-label">
+                        <input type="checkbox" id="cb-type-sub" checked onchange="applyFilters()"> موانئ فرعية
+                    </label>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>الدول المحددة:</label>
+                <div class="btn-group">
+                    <button onclick="toggleAllCountries(true)">تحديد الكل</button>
+                    <button onclick="toggleAllCountries(false)">إلغاء الكل</button>
+                </div>
+                <div class="checkbox-container" id="country-checkboxes">
+                    </div>
+            </div>
+        </div>
+
+        <div class="stat-box box-all">
+            <div class="stat-title"> الموانئ الكلية</div>
+            <div class="stat-number text-cyan" id="total-ports">0</div>
+        </div>
+
+        <div class="stat-box box-main">
+            <div class="stat-title">الرئيسية</div>
+            <div class="stat-number text-red" id="main-ports">0</div>
+        </div>
+
+        <div class="stat-box box-sub">
+            <div class="stat-title">الفرعية</div>
+            <div class="stat-number text-blue" id="sub-ports">0</div>
+        </div>
+
+        <div class="footer-credits">
+            <div class="group-name">تم التنفيذ بواسطة: جروب 8</div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        var map = L.map('map', { zoomControl: false }).setView([35.0, 18.0], 5); 
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        
+        // إعداد روابط خرائط الأساس
+        var lightTiles = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        var darkTiles = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        
+        var currentMapLayer = L.tileLayer(lightTiles, { attribution: '© جروب 8 | CARTO' }).addTo(map);
+
+        // وظيفة تغيير الوضع الفاتح والداكن
+        function toggleTheme() {
+            var theme = document.getElementById('themeToggle').value;
+            map.removeLayer(currentMapLayer); // إزالة الخريطة القديمة
+            
+            if(theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                currentMapLayer = L.tileLayer(darkTiles, { attribution: '© جروب 8 | CARTO' }).addTo(map);
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                currentMapLayer = L.tileLayer(lightTiles, { attribution: '© جروب 8 | CARTO' }).addTo(map);
+            }
+        }
+
+        function createIcon(color, size) {
+            return L.divIcon({
+                html: `<svg class="port-icon-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"><path d="M12 2V22M12 22C7.58172 22 4 18.4183 4 14H6C6 17.3137 8.68629 20 12 20C15.3137 20 18 17.3137 18 14H20C20 18.4183 16.4183 22 12 22ZM9 8H15M12 5C10.8954 5 10 4.10457 10 3C10 1.89543 10.8954 1 12 1C13.1046 1 14 1.89543 14 3C14 4.10457 13.1046 5 12 5Z" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                className: '', iconSize: [size, size], iconAnchor: [size/2, size]
+            });
+        }
+
+        // قاعدة البيانات (363 ميناء)
+        var rawData = [["Europa Point", "Gibraltar", 1, 36.1333, -5.35], ["Livorno", "Italy", 1, 43.542, 10.29], ["Alicante", "Spain", 1, 38.3333, -0.4833], ["Iraklion", "Greece", 1, 35.35, 25.15], ["Toulon", "France", 1, 43.1, 5.9167], ["Sarroch Oil Terminal", "Italy", 1, 39.0833, 9.0333], ["Taranto", "Italy", 1, 40.4667, 17.2], ["Tanger", "Morocco", 1, 35.7833, -5.8167], ["Alger", "Algeria", 1, 36.7667, 3.0667], ["Annaba", "Algeria", 1, 36.9167, 7.7667], ["Ceuta", "Spain", 1, 35.9, -5.3167], ["Civitavecchia", "Italy", 1, 42.102, 11.771], ["Soudha", "Greece", 1, 35.4833, 24.1833], ["Piraievs", "Greece", 1, 37.9333, 23.65], ["Rijeka Luka", "Croatia", 1, 45.3333, 14.4333], ["Bari", "Italy", 1, 41.146, 16.846], ["Kerkira", "Greece", 1, 39.6167, 19.9333], ["Napoli", "Italy", 1, 40.833, 14.275], ["Alexandroupoli", "Greece", 1, 40.8333, 25.8833], ["Ormos Aliveriou", "Greece", 1, 38.3833, 24.05], ["Siracusa", "Italy", 1, 37.05, 15.2833], ["Porto Di Lido-Venezia", "Italy", 1, 45.4167, 12.4333], ["Valletta Harbors", "Malta", 1, 35.9, 14.5167], ["La Goulette", "Tunisia", 1, 36.8, 10.3], ["Nemrut Limani Bay", "Turkey", 1, 38.7667, 26.9167], ["Tunis", "Tunisia", 1, 36.8, 10.25], ["Oran", "Algeria", 1, 35.7, -0.6333], ["Izmir", "Turkey", 1, 38.4333, 27.1333], ["Brindisi", "Italy", 1, 40.65, 17.9833], ["Gallipoli", "Italy", 1, 40.06, 17.984], ["Milazzo", "Italy", 1, 38.2167, 15.25], ["La Spezia", "Italy", 1, 44.1, 9.8333], ["Genova", "Italy", 1, 44.398, 8.922], ["Barcelona", "Spain", 1, 41.35, 2.1667], ["Malaga", "Spain", 1, 36.7167, -4.4167], ["Gioia Tauro", "Italy", 1, 38.444, 15.89], ["Catania", "Italy", 1, 37.5, 15.1], ["Haifa", "Israel", 1, 32.8167, 35.0], ["Messina", "Italy", 1, 38.2, 15.5667], ["Al Iskandariyh (Alexandria)", "Egypt", 1, 31.1667, 29.8333], ["Damietta", "Egypt", 1, 31.4833, 31.75], ["Banghazi", "Libya", 1, 32.1167, 20.05], ["Augusta", "Italy", 1, 37.2167, 15.2333], ["Mina Tarabulus (Tripoli)", "Libya", 1, 32.9, 13.1833], ["Mersin", "Turkey", 1, 36.8, 34.6333], ["Volos", "Greece", 1, 39.3667, 22.95], ["Split", "Croatia", 1, 43.5, 16.4333], ["Thessaloniki", "Greece", 1, 40.6333, 22.9333], ["Palma De Mallorca", "Spain", 1, 39.5667, 2.6333], ["Tangier-Mediterranean", "Morocco", 1, 35.9, -5.5167], ["Tarragona", "Spain", 1, 41.1, 1.2333], ["Valencia", "Spain", 1, 39.45, -0.3167], ["Tazerka Oil Terminal", "Tunisia", 1, 36.6, 11.6833], ["Porto Di Corsini", "Italy", 1, 44.495, 12.291], ["Rada Di Vado", "Italy", 1, 44.265, 8.453], ["Bur Said", "Egypt", 1, 31.2667, 32.3], ["Porto Cervo", "Italy", 1, 41.137, 9.54], ["Tarabulus", "Lebanon", 1, 34.45, 35.8333], ["Bayrut", "Lebanon", 1, 33.9, 35.5], ["Baniyas", "Syria", 1, 35.1883, 35.9433], ["Al Ladhiqiyah", "Syria", 1, 35.5333, 35.7667], ["Cagliari", "Italy", 1, 39.19, 9.102], ["Monfalcone", "Italy", 1, 45.7833, 13.55], ["Trieste", "Italy", 1, 45.651, 13.746], ["Porto Romano", "Albania", 1, 41.3833, 19.4167], ["Al Arish", "Egypt", 1, 31.152, 33.8311], ["Abu Khammash", "Libya", 0, 33.0667, 11.8167], ["Abu Qir", "Egypt", 0, 31.324, 30.0785], ["Achladi", "Greece", 0, 38.9, 22.8167], ["Adra", "Spain", 0, 36.7333, -3.0333], ["Aguilas", "Spain", 0, 37.4, -1.5667], ["Aigio", "Greece", 0, 38.25, 22.0833], ["Aksaz Limani", "Turkey", 0, 36.8333, 28.3833], ["Al Burayqah", "Libya", 0, 30.4167, 19.6], ["Alanya", "Turkey", 0, 36.5333, 32.0], ["Algeciras", "Spain", 0, 36.1333, -5.4333], ["Alghero", "Italy", 0, 40.568, 8.307], ["Aliaga", "Turkey", 0, 38.8333, 26.9333], ["Almeria", "Spain", 0, 36.8333, -2.4667], ["Ancona", "Italy", 0, 43.629, 13.494], ["Andros", "Greece", 0, 37.8333, 24.95], ["Antalya", "Turkey", 0, 36.8333, 30.6167], ["Antalya Offshore Terminal", "Turkey", 0, 36.8167, 30.6], ["Antibes", "France", 0, 43.5833, 7.1333], ["Anzio - Nettuno", "Italy", 0, 41.446, 12.637], ["Arbatax", "Italy", 0, 39.9333, 9.7], ["Argostolion", "Greece", 0, 38.1833, 20.5167], ["Arzew", "Algeria", 0, 35.85, -0.3], ["Arzew El Djedid", "Algeria", 0, 35.8167, -0.25], ["As Sidr", "Libya", 0, 30.6333, 18.3667], ["Ashdod", "Israel", 0, 31.8167, 34.65], ["Ashqelon", "Israel", 0, 31.6667, 34.5], ["Ashtart Oil Terminal", "Tunisia", 0, 34.2833, 11.3833], ["Astakos", "Greece", 0, 38.4833, 21.1], ["Ayios Nikolaos", "Greece", 0, 37.9833, 23.5333], ["Ayios Nikolaos", "Greece", 0, 35.2, 25.7167], ["Ayvalik", "Turkey", 0, 39.3167, 26.7], ["Az Zawiya", "Libya", 0, 32.8, 12.7167], ["Bagnoli", "Italy", 0, 40.81, 14.158], ["Baia", "Italy", 0, 40.817, 14.074], ["Bakar", "Croatia", 0, 45.3, 14.5333], ["Banzart", "Tunisia", 0, 37.2833, 9.8833], ["Bar", "Montenegro", 0, 42.0833, 19.0833], ["Bastia", "France", 0, 42.7, 9.45], ["Bejaia", "Algeria", 0, 36.75, 5.0833], ["Beni Saf", "Algeria", 0, 35.3, -1.3833], ["Bisceglie", "Italy", 0, 41.246, 16.509], ["Bodrum", "Turkey", 0, 37.0333, 27.4333], ["Bonifacio", "France", 0, 41.3833, 9.1667], ["Botas", "Turkey", 0, 36.8833, 35.9333], ["Botas Dortyol Oil Terminal", "Turkey", 0, 36.8667, 36.1333], ["Bouri Oil Field", "Libya", 0, 33.9, 12.65], ["Brsica", "Croatia", 0, 45.0333, 14.05], ["Burriana", "Spain", 0, 39.8833, -0.05], ["Cala Pozzolana", "Italy", 0, 35.864, 12.852], ["Cala Volpe", "Italy", 0, 41.088, 9.542], ["Calvi", "France", 0, 42.5667, 8.75], ["Cannes", "France", 0, 43.55, 7.0167], ["Carloforte", "Italy", 0, 39.147, 8.317], ["Cartagena", "Spain", 0, 37.5833, -0.9833], ["Casamicciola", "Italy", 0, 40.752, 13.912], ["Castellammare Del Golfo", "Italy", 0, 38.032, 12.885], ["Castellammare Di Stabia", "Italy", 0, 40.7, 14.476], ["Cesenatico", "Italy", 0, 44.208, 12.408], ["Chiavari - Lavagna", "Italy", 0, 44.305, 9.326], ["Ciro Marina", "Italy", 0, 39.372, 17.136], ["Civitanova Marche", "Italy", 0, 43.316, 13.734], ["Collo", "Algeria", 0, 37.0, 6.5833], ["Corigliano Calabro", "Italy", 0, 39.672, 16.529], ["Crotone", "Italy", 0, 39.078, 17.136], ["Darnah", "Libya", 0, 32.7667, 22.65], ["Dellys", "Algeria", 0, 36.9167, 3.9167], ["Delta Terminal", "Turkey", 0, 36.85, 36.1667], ["Dhekelia", "Cyprus", 0, 34.9667, 33.7167], ["Didon Terminal", "Tunisia", 0, 33.7833, 11.9], ["Dikili", "Turkey", 0, 39.0167, 26.8167], ["Djen-Djen", "Algeria", 0, 36.8167, 5.8833], ["Dubrovnik", "Croatia", 0, 42.6667, 18.0833], ["Dugi Rat", "Croatia", 0, 43.45, 16.65], ["Durres", "Albania", 0, 41.3167, 19.45], ["El Grao", "Spain", 0, 39.9667, 0.0167], ["El Hamra Oil Terminal", "Egypt", 0, 30.9833, 28.8667], ["El Ismailiya", "Egypt", 0, 30.5833, 32.2833], ["El Maadiya", "Egypt", 0, 31.2667, 30.15], ["Ez Zueitina", "Libya", 0, 30.85, 20.05], ["Famagusta", "Cyprus", 0, 35.1167, 33.9333], ["Fano", "Italy", 0, 43.857, 13.017], ["Favignana", "Italy", 0, 37.933, 12.324], ["Fethiye", "Turkey", 0, 36.6333, 29.1], ["Fiumicino", "Italy", 0, 41.772, 12.214], ["Forio", "Italy", 0, 40.742, 13.859], ["Formia", "Italy", 0, 41.254, 13.614], ["Fos", "France", 0, 43.4167, 4.8833], ["Gabes", "Tunisia", 0, 33.9, 10.1167], ["Gaeta", "Italy", 0, 41.223, 13.577], ["Gavrio", "Greece", 0, 37.8833, 24.7333], ["Gela", "Italy", 0, 37.0667, 14.25], ["Ghazaouet", "Algeria", 0, 35.1, -1.8667], ["Giardini Naxos", "Italy", 0, 37.828, 15.273], ["Giglio Porto", "Italy", 0, 42.362, 10.921], ["Giulianova", "Italy", 0, 42.756, 13.979], ["Golfo Aranci", "Italy", 0, 40.993, 9.624], ["Grado", "Italy", 0, 45.697, 13.298], ["Gulluk", "Turkey", 0, 37.25, 27.6167], ["Hadera", "Israel", 0, 32.4667, 34.9], ["Hornillo", "Spain", 0, 37.4, -1.55], ["Houmt Souk", "Tunisia", 0, 33.8833, 10.85], ["Ibiza", "Spain", 0, 38.9, 1.45], ["Imperia", "Italy", 0, 43.8833, 8.0333], ["Ischia", "Italy", 0, 40.748, 13.944], ["Iskenderun", "Turkey", 0, 36.6, 36.1667], ["Islas Hormigas", "Spain", 0, 37.65, -0.65], ["Itea", "Greece", 0, 38.4333, 22.4167], ["Jijel", "Algeria", 0, 36.8333, 5.7833], ["Kalamata", "Greece", 0, 37.0167, 22.1167], ["Kali Limenes", "Greece", 0, 34.9333, 24.8333], ["Kalimnos", "Greece", 0, 36.95, 26.9833], ["Katakolon", "Greece", 0, 37.65, 21.3167], ["Kavala", "Greece", 0, 40.9333, 24.4], ["Kavonisi-Kissamos", "Greece", 0, 35.5167, 23.6333], ["Khios", "Greece", 0, 38.3667, 26.1333], ["Khoms", "Libya", 0, 32.6667, 14.25], ["Koper", "Slovenia", 0, 45.55, 13.7333], ["Korcula", "Croatia", 0, 42.9333, 17.1333], ["Kotor", "Montenegro", 0, 42.4167, 18.7667], ["Kusadasi", "Turkey", 0, 37.8667, 27.25], ["Kymassi", "Greece", 0, 38.8333, 23.4667], ["Kyrenia", "Cyprus", 0, 35.35, 33.3333], ["Lagos", "Greece", 0, 41.0, 25.1333], ["Lakki", "Greece", 0, 37.1333, 26.85], ["Lampedusa", "Italy", 0, 35.494, 12.601], ["Larimna", "Greece", 0, 38.5667, 23.2833], ["Larnaca", "Cyprus", 0, 34.9167, 33.65], ["Las Hormigas", "Spain", 0, 41.8667, 3.1833], ["Lavrio", "Greece", 0, 37.7, 24.0667], ["Levanzo", "Italy", 0, 37.987, 12.341], ["Licata", "Italy", 0, 37.092, 13.936], ["Lile Rousse", "France", 0, 42.6333, 8.9333], ["Limassol", "Cyprus", 0, 34.6667, 33.05], ["Limin Kos", "Greece", 0, 36.9, 27.2833], ["Limin Sirou", "Greece", 0, 37.4333, 24.95], ["Lipari", "Italy", 0, 38.4833, 14.9667], ["Liscia Di Vacca", "Italy", 0, 41.141, 9.511], ["Maddalena", "Italy", 0, 41.208, 9.403], ["Mahdia", "Tunisia", 0, 35.5, 11.0667], ["Mahon", "Spain", 0, 39.8833, 4.2667], ["Manfredonia", "Italy", 0, 41.6167, 15.9167], ["Marettimo", "Italy", 0, 37.966, 12.075], ["Marina Di Carrara", "Italy", 0, 44.027, 10.047], ["Marmaris", "Turkey", 0, 36.85, 28.2833], ["Marsa Sabratah", "Libya", 0, 32.8167, 12.5], ["Marsala", "Italy", 0, 37.7833, 12.4333], ["Marsaxlokk", "Malta", 0, 35.8167, 14.55], ["Marseille", "France", 0, 43.3167, 5.3667], ["Mazara Del Vallo", "Italy", 0, 37.644, 12.592], ["Megara Oil Terminal", "Greece", 0, 37.9667, 23.4], ["Melilli Oil Terminal", "Italy", 0, 37.1167, 15.25], ["Menzel Bourguiba", "Tunisia", 0, 37.15, 9.8], ["Mers El Kebir", "Algeria", 0, 35.7333, -0.7], ["Mersa Matruh", "Egypt", 0, 31.35, 27.2333], ["Mersa Sfax", "Tunisia", 0, 34.7333, 10.7667], ["Mersa Tobruq", "Libya", 0, 32.0833, 23.9833], ["Mesolongion", "Greece", 0, 38.3667, 21.4167], ["Mikonos", "Greece", 0, 37.45, 25.3333], ["Miliana", "Greece", 0, 39.1667, 23.2167], ["Milos", "Greece", 0, 36.7167, 24.45], ["Miseno", "Italy", 0, 40.7882, 14.0911], ["Misratah", "Libya", 0, 32.3667, 15.2167], ["Mitilini", "Greece", 0, 39.1, 26.5667], ["Mola Di Bari", "Italy", 0, 41.062, 17.1], ["Molfetta", "Italy", 0, 41.2167, 16.6], ["Monaco", "Monaco", 0, 43.7333, 7.4167], ["Monopoli", "Italy", 0, 40.955, 17.308], ["Mostaganem", "Algeria", 0, 35.9333, 0.0833], ["Motril", "Spain", 0, 36.75, -3.5167], ["Muggia", "Italy", 0, 45.6, 13.7667], ["Navplio", "Greece", 0, 37.5667, 22.8], ["Neon Karlovas", "Greece", 0, 37.8, 26.6833], ["Neum", "Bosnia and Herzegovina", 0, 42.9167, 17.6], ["Nice", "France", 0, 43.7, 7.2833], ["Nisos Naxos", "Greece", 0, 37.1, 25.3667], ["Nogaro", "Italy", 0, 45.759, 13.167], ["Olbia", "Italy", 0, 40.925, 9.528], ["Omisalj", "Croatia", 0, 45.2167, 14.55], ["Ortona", "Italy", 0, 42.35, 14.4167], ["Otranto", "Italy", 0, 40.152, 18.493], ["Palamos", "Spain", 0, 41.8333, 3.1167], ["Pantelleria", "Italy", 0, 36.838, 11.942], ["Patrai", "Greece", 0, 38.25, 21.7333], ["Pesaro", "Italy", 0, 43.928, 12.903], ["Pescara", "Italy", 0, 42.464, 14.236], ["Pilos", "Greece", 0, 36.9, 21.6667], ["Piran", "Slovenia", 0, 45.5333, 13.5667], ["Pithagorion", "Greece", 0, 37.6833, 26.95], ["Ploce", "Croatia", 0, 43.05, 17.4333], ["Plomarion", "Greece", 0, 38.9833, 26.3667], ["Ponza", "Italy", 0, 40.895, 12.964], ["Port D Ajaccio", "France", 0, 41.9167, 8.75], ["Port D Al Hoceima", "Morocco", 0, 35.25, -3.9167], ["Port De Propriano", "France", 0, 41.6833, 8.9], ["Port Methanier", "Algeria", 0, 36.8833, 6.95], ["Port Nador", "Morocco", 0, 35.2833, -2.9333], ["Port Saint Louis Du Rhone", "France", 0, 43.3833, 4.8167], ["Port-de-Bouc", "France", 0, 43.4, 4.9833], ["Porthmos Evripou", "Greece", 0, 38.4667, 23.5833], ["Port-La-Nouvelle", "France", 0, 43.0167, 3.0667], ["Porto Di Barletta", "Italy", 0, 41.334, 16.292], ["Porto Di Chioggia", "Italy", 0, 45.2333, 12.3], ["Porto Di Malamocco", "Italy", 0, 45.3333, 12.3167], ["Porto Di Oristano", "Italy", 0, 39.8667, 8.55], ["Porto Di Palermo", "Italy", 0, 38.119, 13.38], ["Porto Empedocle", "Italy", 0, 37.278, 13.528], ["Porto Ercole", "Italy", 0, 42.404, 11.213], ["Porto Garibaldi", "Italy", 0, 44.677, 12.252], ["Porto Ponte Romano", "Italy", 0, 39.05, 8.4667], ["Porto Santo Stefano", "Italy", 0, 42.44, 11.122], ["Porto Torres", "Italy", 0, 40.852, 8.396], ["Porto Vecchio", "France", 0, 41.5833, 9.2833], ["Porto Vesme", "Italy", 0, 39.194, 8.384], ["Portoferraio", "Italy", 0, 42.8167, 10.3333], ["Portovecchio Di Piombino", "Italy", 0, 42.933, 10.557], ["Port-Vendres", "France", 0, 42.5167, 3.1167], ["Pozzallo", "Italy", 0, 36.7167, 14.85], ["Pozzuoli", "Italy", 0, 40.824, 14.11], ["Preveza", "Greece", 0, 38.95, 20.75], ["Procida", "Italy", 0, 40.77, 14.031], ["Puerto De Alcudia", "Spain", 0, 39.8333, 3.1333], ["Puerto De Carboneras", "Spain", 0, 37.0, -1.8833], ["Puerto De Gandia", "Spain", 0, 39.0, -0.15], ["Puerto De Garrucha", "Spain", 0, 37.1833, -1.8167], ["Pula", "Croatia", 0, 44.8833, 13.8], ["Rades", "Tunisia", 0, 36.8167, 10.3], ["Ras   Lanuf", "Libya", 0, 30.5167, 18.5667], ["Reggio Di Calabria", "Italy", 0, 38.129, 15.65], ["Rethimnon", "Greece", 0, 35.3667, 24.4667], ["Rimini", "Italy", 0, 44.081, 12.574], ["Riposta", "Italy", 0, 37.735, 15.209], ["Risan", "Montenegro", 0, 42.5167, 18.7], ["Rodhos", "Greece", 0, 36.45, 28.2333], ["Rosas", "Spain", 0, 42.2667, 3.1833], ["Rovinj", "Croatia", 0, 45.0833, 13.6333], ["Sagunto", "Spain", 0, 39.65, -0.2167], ["Saint-Raphael", "France", 0, 43.4167, 6.7667], ["Saint-Tropez", "France", 0, 43.2667, 6.6333], ["Salerno", "Italy", 0, 40.6667, 14.75], ["Samos", "Greece", 0, 37.75, 26.9667], ["San Benedetto Del Tronto", "Italy", 0, 42.96, 13.892], ["San Felice Circeo", "Italy", 0, 41.226, 13.097], ["San Feliu De Guixols", "Spain", 0, 41.7833, 3.0333], ["San Remo", "Italy", 0, 43.817, 7.786], ["San Vito Lo Capo", "Italy", 0, 38.181, 12.736], ["Santa Panagia", "Italy", 0, 37.069, 15.297], ["SantAntioco", "Italy", 0, 39.066, 8.46], ["Savona", "Italy", 0, 44.3167, 8.5], ["Sayda", "Lebanon", 0, 33.5, 35.35], ["Scalo Vecchio", "Italy", 0, 35.855, 12.863], ["Sciacca", "Italy", 0, 37.502, 13.075], ["Selaata", "Lebanon", 0, 34.2833, 35.655], ["Senigallia", "Italy", 0, 43.724, 13.221], ["Senj", "Croatia", 0, 44.9833, 14.9], ["Sete", "France", 0, 43.4, 3.7], ["Shengjin", "Albania", 0, 41.8167, 19.6], ["Sibenik", "Croatia", 0, 43.7333, 15.8833], ["Sidi Kerir (Kurayr)", "Egypt", 0, 31.0567, 29.6704], ["Sidon/zahrani Terminal", "Lebanon", 0, 33.5333, 35.3167], ["Sitia", "Greece", 0, 35.2167, 26.1333], ["Skhira", "Tunisia", 0, 34.2833, 10.1], ["Skikda", "Algeria", 0, 36.8833, 6.9167], ["Sousse", "Tunisia", 0, 35.8333, 10.65], ["Spetses", "Greece", 0, 37.2667, 23.1667], ["Stilis", "Greece", 0, 38.9167, 22.6167], ["Stratoni", "Greece", 0, 40.5167, 23.8333], ["Tabarka", "Tunisia", 0, 36.9667, 8.7667], ["Tartus", "Syria", 0, 34.9, 35.8667], ["Tasucu", "Turkey", 0, 36.3167, 33.8833], ["Tenes", "Algeria", 0, 36.5333, 1.3167], ["Termini Imerese", "Italy", 0, 37.985, 13.723], ["Terracina", "Italy", 0, 41.283, 13.258], ["Tivat", "Montenegro", 0, 42.4333, 18.7], ["Toros Gubre", "Turkey", 0, 36.9167, 35.9667], ["Torre Annunziata", "Italy", 0, 40.75, 14.45], ["Torre Del Greco", "Italy", 0, 40.7833, 14.3667], ["Torrevieja", "Spain", 0, 37.9667, -0.6833], ["Trani", "Italy", 0, 41.2834, 16.4237], ["Trapani", "Italy", 0, 38.012, 12.506], ["Tsingeli", "Greece", 0, 39.1667, 22.85], ["Umag", "Croatia", 0, 45.4333, 13.5167], ["Vada", "Italy", 0, 43.35, 10.45], ["Vasto", "Italy", 0, 42.1167, 14.7167], ["Viareggio", "Italy", 0, 43.862, 10.234], ["Vibo Valentia Marina", "Italy", 0, 38.723, 16.13], ["Villa San Giovanni", "Italy", 0, 38.222, 15.63], ["Villanueva Y Geltru", "Spain", 0, 41.2333, 1.7333], ["Villefranche", "France", 0, 43.7, 7.3167], ["Vlore", "Albania", 0, 40.4667, 19.5], ["Vrakhonisis Kallonis", "Greece", 0, 39.0833, 26.0833], ["Xeros", "Cyprus", 0, 35.1333, 32.8333], ["Yakacik", "Turkey", 0, 36.7167, 36.1833], ["Yerakini", "Greece", 0, 40.2667, 23.4667], ["Yithion", "Greece", 0, 36.75, 22.5667], ["Zadar", "Croatia", 0, 44.1167, 15.2167], ["Zaliv Rasa", "Croatia", 0, 45.05, 14.0667], ["Zarzis", "Tunisia", 0, 33.5, 11.1167]];
+
+        // استخراج الدول وعمل Checkboxes
+        var countries = [];
+        rawData.forEach(function(item) {
+            if(item[1] && countries.indexOf(item[1]) === -1) {
+                countries.push(item[1]);
+            }
+        });
+        countries.sort();
+        
+        var container = document.getElementById('country-checkboxes');
+        countries.forEach(function(c) {
+            var label = document.createElement('label');
+            label.className = 'cb-label';
+            label.innerHTML = `<input type="checkbox" class="country-cb" value="${c}" checked onchange="applyFilters()"> ${c}`;
+            container.appendChild(label);
+        });
+
+        // أزرار تحديد / إلغاء الدول
+        function toggleAllCountries(checkStatus) {
+            var checkboxes = document.querySelectorAll('.country-cb');
+            checkboxes.forEach(function(cb) {
+                cb.checked = checkStatus;
+            });
+            applyFilters();
+        }
+
+        var mainLayerGroup = L.layerGroup().addTo(map);
+        var subLayerGroup = L.layerGroup().addTo(map);
+
+        // وظيفة الفلترة الديناميكية
+        function applyFilters() {
+            var showMain = document.getElementById('cb-type-main').checked;
+            var showSub = document.getElementById('cb-type-sub').checked;
+            
+            var checkedBoxes = document.querySelectorAll('.country-cb:checked');
+            var selectedCountries = Array.from(checkedBoxes).map(cb => cb.value);
+
+            mainLayerGroup.clearLayers();
+            subLayerGroup.clearLayers();
+            
+            var counts = { all: 0, main: 0, sub: 0 };
+            var bounds = []; 
+
+            rawData.forEach(function(item) {
+                var pName = item[0], pCountry = item[1], isMain = (item[2] === 1), pLat = item[3], pLng = item[4];
+                
+                // تطبيق شروط الفلتر
+                if (isMain && !showMain) return;
+                if (!isMain && !showSub) return;
+                if (selectedCountries.indexOf(pCountry) === -1) return;
+
+                var color = isMain ? "#e84118" : "#00a8ff"; 
+                var size = isMain ? 24 : 16;
+                var marker = L.marker([pLat, pLng], { icon: createIcon(color, size) });
+
+                marker.bindTooltip(pName, { className: 'port-label', direction: 'top', offset: [0, -10] });
+                var typeName = isMain ? "ميناء رئيسي" : "ميناء فرعي";
+                marker.bindPopup(`
+                    <div style='border-bottom:1px solid var(--border-color); margin-bottom:8px; padding-bottom:8px;'>
+                        <b style='color:${color}; font-size:15px;'>${pName}</b>
+                    </div>
+                    <b>الدولة:</b> ${pCountry}<br>
+                    <b>التصنيف:</b> ${typeName}
+                `);
+
+                if(isMain) {
+                    marker.addTo(mainLayerGroup);
+                    counts.main++;
+                } else {
+                    marker.addTo(subLayerGroup);
+                    counts.sub++;
+                }
+                counts.all++;
+                bounds.push([pLat, pLng]);
+            });
+
+            // تحديث الإحصائيات
+            document.getElementById('total-ports').innerText = counts.all;
+            document.getElementById('main-ports').innerText = counts.main;
+            document.getElementById('sub-ports').innerText = counts.sub;
+
+            // زووم تلقائي
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 6 });
+            } else {
+                map.setView([35.0, 18.0], 5);
+            }
+        }
+
+        // تشغيل الفلاتر عند البداية
+        applyFilters();
+
+
+        window.addEventListener("load", function () {
+    setTimeout(function () {
+        document.getElementById("loader").classList.add("hide");
+    }, 1200); // مدة العرض
+});
+
+    </script>
+</body>
+</html>
